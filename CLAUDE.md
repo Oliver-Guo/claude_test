@@ -184,33 +184,6 @@ enum UserRole {
 
 ---
 
-## 🔐 環境變數
-
-### Backend `.env`
-```env
-# 伺服器
-NODE_ENV=development
-PORT=3001
-
-# 資料庫
-DATABASE_URL="mysql://root:password@localhost:3306/myapp"
-
-# JWT
-JWT_SECRET=your-super-secret-key-here
-JWT_EXPIRES_IN=7d
-
-# CORS
-CORS_ORIGIN=http://localhost:5173
-```
-
-### Frontend `.env`
-```env
-VITE_API_BASE_URL=http://localhost:3001/api/v1
-VITE_APP_NAME=MyApp
-```
-
----
-
 ## 🏗️ 後端三層架構範例
 
 ### Controller（只處理 HTTP）
@@ -371,50 +344,6 @@ style(frontend): 統一 UserCard 元件樣式
 - **test**：測試相關
 - **chore**：建置/工具/依賴
 - **style**：樣式/格式（不影響邏輯）
-
----
-
-## 🐳 Docker 開發環境
-
-```bash
-# 啟動所有服務（開發）
-docker-compose up -d
-
-# 查看日誌
-docker-compose logs -f backend
-
-# 執行 Prisma migration
-docker-compose exec backend npx prisma migrate dev
-
-# 重建特定服務
-docker-compose up -d --build backend
-```
-
----
-
-## 🚀 本地開發啟動
-
-```bash
-# 1. 安裝依賴
-cd backend && npm install
-cd ../frontend && npm install
-
-# 2. 設定環境變數
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-
-# 3. 啟動 MySQL（Docker）
-docker-compose up -d mysql
-
-# 4. 執行資料庫 migration
-cd backend && npx prisma migrate dev
-
-# 5. 啟動後端（port 3001）
-cd backend && npm run dev
-
-# 6. 啟動前端（port 5173）
-cd frontend && npm run dev
-```
 
 ---
 

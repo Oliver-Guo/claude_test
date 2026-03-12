@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: blog-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: blog
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../ops/Dockerfile.backend
+    container_name: blog-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: mysql://root:rootpass@mysql:3306/blog
+      JWT_SECRET: change-this-in-production-min-32-chars
+      JWT_EXPIRES_IN: 7d
+      CORS_ORIGIN: http://localhost
+      LOG_LEVEL: info
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: >
+      sh -c "npx prisma db push --accept-data-loss &&
+             npx tsx prisma/seed.ts &&
+             node dist/app.js"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile.frontend
+    container_name: blog-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
+    driver: local
