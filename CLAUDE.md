@@ -2,6 +2,7 @@
 
 > 本文件是 Claude AI 開發本專案的核心說明文件。
 > 每次開始新的開發任務前，請先閱讀此文件。
+> 各子目錄有對應的 CLAUDE.md，包含更詳細的實作細節。
 
 ---
 
@@ -64,39 +65,22 @@ project/
 
 ### 檔案命名
 ```
-# Backend
-user.controller.ts        # kebab-case + 層級後綴
-user.service.ts
-user.repository.ts
-user.routes.ts
-user.schema.ts            # Zod schema
-auth.middleware.ts
+# Backend（kebab-case + 層級後綴）
+user.controller.ts / user.service.ts / user.repository.ts
+user.routes.ts / user.schema.ts / auth.middleware.ts
 
 # Frontend
-UserCard.tsx              # PascalCase (React 元件)
-useAuth.ts                # camelCase + use 前綴 (hooks)
-userStore.ts              # camelCase + Store 後綴
-user.api.ts               # kebab-case (API 呼叫)
+UserCard.tsx       # PascalCase（React 元件）
+useAuth.ts         # camelCase + use 前綴（hooks）
+userStore.ts       # camelCase + Store 後綴
+user.api.ts        # kebab-case（API 呼叫）
 ```
 
 ### 變數與函式
-```typescript
-// 一般變數/函式 → camelCase
-const getUserById = async (id: number) => {}
-let isLoading = false
-
-// 常數 → UPPER_SNAKE_CASE
-const MAX_RETRY_COUNT = 3
-const API_BASE_URL = '/api/v1'
-
-// React 元件 → PascalCase
-const UserProfileCard = () => {}
-
-// TypeScript 型別/介面 → PascalCase
-interface UserResponse { id: number; name: string }
-type CreateUserDto = { name: string; email: string }
-enum UserRole { ADMIN = 'ADMIN', USER = 'USER' }
-```
+- 一般變數/函式 → `camelCase`（`getUserById`、`isLoading`）
+- 常數 → `UPPER_SNAKE_CASE`（`MAX_RETRY_COUNT`、`API_BASE_URL`）
+- React 元件 → `PascalCase`（`UserProfileCard`）
+- TypeScript 型別/介面/enum → `PascalCase`（`UserResponse`、`UserRole`）
 
 ---
 
@@ -114,31 +98,14 @@ GET    /api/v1/users/:id/orders   # 關聯資源
 
 ### 統一回應格式
 ```typescript
-// ✅ 成功回應
-{
-  "success": true,
-  "data": { ... },
-  "message": "操作成功"
-}
+// 成功
+{ "success": true, "data": { ... }, "message": "操作成功" }
 
-// ✅ 分頁回應
-{
-  "success": true,
-  "data": [ ... ],
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "total": 100,
-    "totalPages": 5
-  }
-}
+// 分頁
+{ "success": true, "data": [ ... ], "pagination": { "page": 1, "limit": 20, "total": 100, "totalPages": 5 } }
 
-// ✅ 錯誤回應
-{
-  "success": false,
-  "error": "RESOURCE_NOT_FOUND",    // 錯誤代碼（大寫底線）
-  "message": "用戶不存在"            // 人類可讀訊息
-}
+// 錯誤
+{ "success": false, "error": "RESOURCE_NOT_FOUND", "message": "用戶不存在" }
 ```
 
 ### HTTP 狀態碼
@@ -155,195 +122,21 @@ GET    /api/v1/users/:id/orders   # 關聯資源
 
 ---
 
-## 🗄️ 資料庫規範
-
-### Prisma Schema 規範
-```prisma
-// ✅ 表名用 PascalCase（Prisma 自動轉 snake_case）
-model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String
-  role      UserRole @default(USER)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("users")  // 資料庫表名用 snake_case 複數
-}
-
-enum UserRole {
-  ADMIN
-  USER
-}
-```
-
-### 命名規則
-- 表名：`snake_case` 複數（`users`, `order_items`）
-- 欄位名：`snake_case`（`created_at`, `user_id`）
-- Prisma Model：`PascalCase` 單數（`User`, `OrderItem`）
-
----
-
-## 🏗️ 後端三層架構範例
-
-### Controller（只處理 HTTP）
-```typescript
-// src/controllers/user.controller.ts
-export const getUser = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const user = await userService.findById(Number(req.params.id))
-    res.json({ success: true, data: user })
-  } catch (error) {
-    next(error)  // 傳給 errorHandler middleware
-  }
-}
-```
-
-### Service（業務邏輯）
-```typescript
-// src/services/user.service.ts
-export const findById = async (id: number): Promise<UserResponse> => {
-  const user = await userRepository.findById(id)
-  if (!user) throw new AppError('USER_NOT_FOUND', '用戶不存在', 404)
-  return user
-}
-```
-
-### Repository（只碰資料庫）
-```typescript
-// src/repositories/user.repository.ts
-export const findById = async (id: number) => {
-  return prisma.user.findUnique({ where: { id } })
-}
-```
-
----
-
-## ⚛️ 前端開發規範
-
-### 元件結構
-```typescript
-// ✅ 標準元件結構
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Button } from '@/components/ui/button'
-import { fetchUser } from '@/api/user.api'
-import type { User } from '@/types/user'
-
-interface UserCardProps {
-  userId: number
-  onEdit?: (user: User) => void
-}
-
-export default function UserCard({ userId, onEdit }: UserCardProps) {
-  const { data: user, isLoading } = useQuery({
-    queryKey: ['user', userId],
-    queryFn: () => fetchUser(userId),
-  })
-
-  if (isLoading) return <div>Loading...</div>
-  if (!user) return null
-
-  return (
-    <div className="rounded-lg border p-4">
-      <h3 className="font-semibold">{user.name}</h3>
-      {onEdit && <Button onClick={() => onEdit(user)}>編輯</Button>}
-    </div>
-  )
-}
-```
-
-### API 呼叫層
-```typescript
-// src/api/user.api.ts
-import axios from '@/lib/axios'
-import type { User, CreateUserDto } from '@/types/user'
-
-export const fetchUsers = () =>
-  axios.get<User[]>('/users').then(r => r.data)
-
-export const fetchUser = (id: number) =>
-  axios.get<User>(`/users/${id}`).then(r => r.data)
-
-export const createUser = (dto: CreateUserDto) =>
-  axios.post<User>('/users', dto).then(r => r.data)
-```
-
-### Zustand Store
-```typescript
-// src/stores/authStore.ts
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-
-interface AuthState {
-  token: string | null
-  user: User | null
-  setAuth: (token: string, user: User) => void
-  logout: () => void
-}
-
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      token: null,
-      user: null,
-      setAuth: (token, user) => set({ token, user }),
-      logout: () => set({ token: null, user: null }),
-    }),
-    { name: 'auth-storage' }
-  )
-)
-```
-
----
-
-## 🧪 測試規範
-
-```typescript
-// tests/user.test.ts
-import { describe, it, expect, beforeEach } from 'vitest'
-import request from 'supertest'
-import app from '../src/app'
-
-describe('GET /api/v1/users/:id', () => {
-  it('should return user when exists', async () => {
-    const res = await request(app).get('/api/v1/users/1')
-    expect(res.status).toBe(200)
-    expect(res.body.success).toBe(true)
-    expect(res.body.data).toHaveProperty('id')
-  })
-
-  it('should return 404 when not found', async () => {
-    const res = await request(app).get('/api/v1/users/99999')
-    expect(res.status).toBe(404)
-  })
-})
-```
-
----
-
 ## 📝 Git Commit 規範
 
-遵循 [Conventional Commits](https://www.conventionalcommits.org/)：
+遵循 [Conventional Commits](https://www.conventionalcommits.org/)，格式：`type(scope): 描述`
 
-```
-feat(user): 新增用戶列表 API
-fix(auth): 修復 JWT 過期判斷邏輯
-docs(api): 更新 Swagger 文檔
-refactor(service): 重構用戶服務層
-test(user): 新增用戶控制器單元測試
-chore(deps): 升級 Prisma 至 5.8.0
-style(frontend): 統一 UserCard 元件樣式
-```
+| 類型 | 用途 |
+|------|------|
+| feat | 新功能 |
+| fix | 修復 bug |
+| docs | 文檔更新 |
+| refactor | 重構（不影響功能） |
+| test | 測試相關 |
+| chore | 建置/工具/依賴 |
+| style | 樣式/格式（不影響邏輯） |
 
-格式：`type(scope): 描述`
-- **feat**：新功能
-- **fix**：修復 bug
-- **docs**：文檔更新
-- **refactor**：重構（不影響功能）
-- **test**：測試相關
-- **chore**：建置/工具/依賴
-- **style**：樣式/格式（不影響邏輯）
+範例：`feat(user): 新增用戶列表 API`
 
 ---
 

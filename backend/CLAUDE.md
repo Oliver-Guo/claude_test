@@ -1,10 +1,21 @@
 # Backend — CLAUDE.md
 
-> 後端開發指南，補充根目錄 CLAUDE.md 的後端細節。
+> 後端開發指南。詳細任務請使用對應 skill 指令（見下方）。
 
 ---
 
-## 目錄結構說明
+## 可用 Skills（按需呼叫，節省 context）
+
+| 指令 | 觸發時機 |
+|------|---------|
+| `/backend-crud <ResourceName>` | 新增完整 CRUD 模組（Controller/Service/Repository/Routes/Schema） |
+| `/backend-test <resource>` | 為指定資源產生整合測試 |
+| `/backend-templates [AppError\|error\|validate\|auth\|env\|all]` | 產生或修復後端基礎設施檔案 |
+| `/backend-prisma [migrate\|seed\|query\|reset]` | Prisma 操作協助 |
+
+---
+
+## 目錄結構
 
 ```
 backend/
@@ -23,117 +34,65 @@ backend/
 │   │   └── error.middleware.ts
 │   ├── schemas/             # Zod 驗證 Schema
 │   ├── utils/
-│   │   ├── AppError.ts      # 自訂錯誤類別
-│   │   ├── response.ts      # 統一回應工具
-│   │   └── logger.ts        # Winston logger
-│   └── app.ts               # Express 應用
+│   │   ├── AppError.ts
+│   │   ├── response.ts
+│   │   └── logger.ts
+│   └── app.ts
 ├── prisma/
 │   ├── schema.prisma
-│   └── seed.ts              # 種子資料
+│   └── seed.ts
 ├── tests/
-├── .env.example
-├── tsconfig.json
-└── package.json
+└── .env.example
 ```
 
 ---
 
-## 關鍵檔案範本
+## 🗄️ 資料庫規範
 
-### `src/utils/AppError.ts`
-```typescript
-export class AppError extends Error {
-  constructor(
-    public code: string,
-    public message: string,
-    public statusCode: number = 500
-  ) {
-    super(message)
-    this.name = 'AppError'
-  }
+### Prisma Schema 範例
+```prisma
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
 }
+
+enum UserRole { ADMIN USER }
 ```
 
-### `src/middlewares/error.middleware.ts`
+### 命名規則
+- 表名：`snake_case` 複數（`users`, `order_items`）
+- 欄位名：`snake_case`（`created_at`, `user_id`）
+- Prisma Model：`PascalCase` 單數（`User`, `OrderItem`）
+
+---
+
+## 🏗️ 三層架構範例
+
 ```typescript
-import { Request, Response, NextFunction } from 'express'
-import { AppError } from '../utils/AppError'
-import { ZodError } from 'zod'
-
-export const errorHandler = (
-  err: Error,
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  if (err instanceof AppError) {
-    return res.status(err.statusCode).json({
-      success: false,
-      error: err.code,
-      message: err.message,
-    })
-  }
-
-  if (err instanceof ZodError) {
-    return res.status(400).json({
-      success: false,
-      error: 'VALIDATION_ERROR',
-      message: err.errors[0].message,
-      details: err.errors,
-    })
-  }
-
-  console.error(err)
-  res.status(500).json({
-    success: false,
-    error: 'INTERNAL_ERROR',
-    message: '伺服器發生錯誤',
-  })
+// Controller — 只處理 HTTP
+export const getUser = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = await userService.findById(Number(req.params.id))
+    res.json({ success: true, data: user })
+  } catch (error) { next(error) }
 }
-```
 
-### `src/middlewares/validate.middleware.ts`
-```typescript
-import { Request, Response, NextFunction } from 'express'
-import { ZodSchema } from 'zod'
+// Service — 業務邏輯
+export const findById = async (id: number): Promise<UserResponse> => {
+  const user = await userRepository.findById(id)
+  if (!user) throw new AppError('USER_NOT_FOUND', '用戶不存在', 404)
+  return user
+}
 
-export const validate = (schema: ZodSchema) =>
-  (req: Request, res: Response, next: NextFunction) => {
-    try {
-      req.body = schema.parse(req.body)
-      next()
-    } catch (error) {
-      next(error)
-    }
-  }
-```
-
----
-
-## 新增 CRUD 模組的步驟
-
-1. **Prisma Schema** → 在 `prisma/schema.prisma` 新增 Model
-2. **執行 Migration** → `npx prisma migrate dev --name add_xxx`
-3. **Zod Schema** → `src/schemas/xxx.schema.ts`
-4. **Repository** → `src/repositories/xxx.repository.ts`
-5. **Service** → `src/services/xxx.service.ts`
-6. **Controller** → `src/controllers/xxx.controller.ts`
-7. **Routes** → `src/routes/xxx.routes.ts`
-8. **掛載路由** → 在 `src/app.ts` 中 import 並 `app.use()`
-9. **Swagger 文檔** → 在 Controller 加 JSDoc 註解
-10. **測試** → `tests/xxx.test.ts`
-
----
-
-## 常用 Prisma 指令
-
-```bash
-npx prisma migrate dev --name <migration_name>   # 建立並執行 migration
-npx prisma migrate reset                          # 重置資料庫（開發）
-npx prisma generate                               # 重新生成 client
-npx prisma studio                                 # 開啟資料庫 GUI
-npx prisma db seed                                # 執行種子資料
-npx prisma format                                 # 格式化 schema
+// Repository — 只碰資料庫
+export const findById = (id: number) =>
+  prisma.user.findUnique({ where: { id } })
 ```
 
 ---
@@ -141,11 +100,11 @@ npx prisma format                                 # 格式化 schema
 ## 環境變數清單
 
 ```env
-NODE_ENV=development          # development | production | test
-PORT=3001                     # 伺服器埠號
-DATABASE_URL=                 # MySQL 連線字串
-JWT_SECRET=                   # JWT 簽名密鑰（至少 32 字元）
-JWT_EXPIRES_IN=7d             # JWT 有效期
-CORS_ORIGIN=                  # 允許的前端來源
-LOG_LEVEL=info                # error | warn | info | debug
+NODE_ENV=development
+PORT=3001
+DATABASE_URL=           # MySQL 連線字串
+JWT_SECRET=             # 至少 32 字元
+JWT_EXPIRES_IN=7d
+CORS_ORIGIN=
+LOG_LEVEL=info          # error | warn | info | debug
 ```
